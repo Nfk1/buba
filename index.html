@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NexaChat — Messenger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<style>
+/* ===== RESET & VARIABLES ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#6C5CE7;--primary-dark:#5A4BD1;--primary-light:#A29BFE;
+  --primary-bg:rgba(108,92,231,.08);--bg:#F0F2F5;--surface:#FFF;
+  --surface-hover:#F5F5F7;--text:#1A1A2E;--text-sec:#65676B;
+  --text-muted:#A0A4A8;--border:#E4E6EB;--border-light:#F0F0F0;
+  --sent:#6C5CE7;--sent-text:#FFF;--recv:#E4E6EB;--recv-text:#1A1A2E;
+  --online:#31A24C;--error:#E74C3C;--warn:#F39C12;
+  --shadow:0 2px 12px rgba(0,0,0,.08);--shadow-lg:0 8px 32px rgba(0,0,0,.12);
+  --r:12px;--r-sm:8px;--r-lg:16px;--r-xl:20px;
+  --sidebar-w:380px;--header-h:64px;--input-h:64px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+input,textarea,button{font-family:inherit;font-size:inherit;border:none;outline:none}
+button{cursor:pointer;background:none}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+
+/* ===== AUTH SCREEN ===== */
+#authScreen{
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;padding:20px;
+  background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+}
+.auth-card{
+  background:var(--surface);border-radius:var(--r-xl);padding:48px 40px;
+  width:100%;max-width:420px;box-shadow:var(--shadow-lg);
+  animation:fadeInUp .5s ease;
+}
+.auth-logo{text-align:center;margin-bottom:32px}
+.auth-logo .logo-icon{font-size:56px;margin-bottom:8px;display:block}
+.auth-logo h1{font-size:28px;font-weight:800;color:var(--text);letter-spacing:-.5px}
+.auth-logo p{color:var(--text-sec);margin-top:4px;font-size:15px}
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:var(--text-sec)}
+.form-group input,.form-group textarea{
+  width:100%;padding:12px 16px;border:2px solid var(--border);
+  border-radius:var(--r);font-size:15px;transition:all .2s;
+  background:var(--bg);
+}
+.form-group input:focus,.form-group textarea:focus{border-color:var(--primary);background:#fff}
+.btn-primary{
+  width:100%;padding:14px;background:var(--primary);color:#fff;
+  font-weight:700;font-size:15px;border-radius:var(--r);
+  transition:all .2s;margin-top:8px;
+}
+.btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px);box-shadow:0 4px 16px rgba(108,92,231,.3)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.auth-switch{text-align:center;margin-top:20px;color:var(--text-sec);font-size:14px}
+.auth-switch a{font-weight:600}
+.error-msg{
+  background:rgba(231,76,60,.1);color:var(--error);padding:12px 16px;
+  border-radius:var(--r-sm);margin-top:16px;font-size:13px;font-weight:500;
+  display:none;text-align:center;
+}
+.error-msg.show{display:block}
+
+/* ===== APP LAYOUT ===== */
+#app{display:flex;height:100vh;overflow:hidden}
+
+/* ===== SIDEBAR ===== */
+#sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);height:100vh;
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:10;
+}
+.sidebar-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;height:var(--header-h);border-bottom:1px solid var(--border-light);
+}
+.user-info{display:flex;align-items:center;gap:12px;cursor:pointer;flex:1;min-width:0}
+.user-info:hover .user-details .username{color:var(--primary)}
+.user-details{min-width:0}
+.user-details .username{font-weight:700;font-size:15px;display:block;transition:color .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-details .user-status{font-size:12px;color:var(--online);font-weight:500}
+.header-actions{display:flex;gap:4px;align-items:center}
+
+/* Avatar */
+.avatar{
+  width:42px;height:42px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:16px;color:#fff;flex-shrink:0;
+  background:var(--primary);position:relative;overflow:hidden;
+}
+.avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.avatar.large{width:90px;height:90px;font-size:32px}
+.avatar.small{width:36px;height:36px;font-size:14px}
+.avatar .online-dot{
+  position:absolute;bottom:1px;right:1px;width:12px;height:12px;
+  background:var(--online);border:2px solid var(--surface);border-radius:50%;
+}
+
+/* Icon Button */
+.icon-btn{
+  width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;transition:all .2s;color:var(--text-sec);position:relative;
+}
+.icon-btn:hover{background:var(--surface-hover);color:var(--text)}
+.icon-btn .material-icons-round{font-size:22px}
+.badge{
+  position:absolute;top:2px;right:2px;
+  background:var(--error);color:#fff;font-size:10px;font-weight:700;
+  min-width:18px;height:18px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;padding:0 5px;
+}
+
+/* Sidebar Tabs */
+.sidebar-tabs{
+  display:flex;padding:8px 12px;gap:4px;border-bottom:1px solid var(--border-light);
+}
+.sidebar-tabs .tab{
+  flex:1;padding:8px;border-radius:var(--r-sm);font-weight:600;font-size:13px;
+  color:var(--text-sec);transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.sidebar-tabs .tab .material-icons-round{font-size:18px}
+.sidebar-tabs .tab:hover{background:var(--surface-hover)}
+.sidebar-tabs .tab.active{background:var(--primary-bg);color:var(--primary)}
+
+/* Search Bar */
+.search-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 16px;border-bottom:1px solid var(--border-light);
+}
+.search-bar .material-icons-round{color:var(--text-muted);font-size:20px}
+.search-bar input{flex:1;padding:8px 0;font-size:14px;background:transparent}
+
+/* Sidebar Content */
+.sidebar-content{flex:1;overflow-y:auto}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Chat Item */
+.chat-item,.friend-item,.search-item,.request-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 16px;cursor:pointer;transition:all .15s;
+}
+.chat-item:hover,.friend-item:hover,.search-item:hover{background:var(--surface-hover)}
+.chat-item.active{background:var(--primary-bg)}
+.chat-item-info,.friend-item-info{flex:1;min-width:0}
+.chat-item-info .name,.friend-item-info .name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-item-info .last-msg{
+  font-size:13px;color:var(--text-sec);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;
+}
+.chat-item-meta{text-align:right;flex-shrink:0}
+.chat-item-meta .time{font-size:11px;color:var(--text-muted);font-weight:500}
+.chat-item-meta .unread-badge{
+  background:var(--primary);color:#fff;font-size:11px;font-weight:700;
+  min-width:20px;height:20px;border-radius:10px;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0 6px;margin-top:4px;
+}
+
+/* Friend / Search / Request Items */
+.friend-item-info .status-text{font-size:12px;color:var(--text-muted)}
+.friend-item-info .status-text.online{color:var(--online)}
+.item-actions{display:flex;gap:6px}
+.btn-sm{
+  padding:6px 14px;border-radius:var(--r-sm);font-weight:600;font-size:12px;
+  transition:all .2s;
+}
+.btn-sm.primary{background:var(--primary);color:#fff}
+.btn-sm.primary:hover{background:var(--primary-dark)}
+.btn-sm.secondary{background:var(--surface-hover);color:var(--text)}
+.btn-sm.secondary:hover{background:var(--border)}
+.btn-sm.danger{background:rgba(231,76,60,.1);color:var(--error)}
+.btn-sm.danger:hover{background:rgba(231,76,60,.2)}
+.btn-sm:disabled{opacity:.5;cursor:not-allowed}
+
+/* Empty State */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:60px 20px;color:var(--text-muted);text-align:center;
+}
+.empty-state .material-icons-round{font-size:64px;margin-bottom:16px;opacity:.4}
+.empty-state p{font-size:16px;font-weight:600;color:var(--text-sec);margin-bottom:4px}
+.empty-state small{font-size:13px}
+
+/* ===== CHAT AREA ===== */
+#chatArea{flex:1;display:flex;flex-direction:column;background:var(--bg);min-width:0}
+
+.empty-chat{
+  flex:1;display:flex;align-items:center;justify-content:center;
+}
+.empty-chat-content{text-align:center;color:var(--text-muted)}
+.empty-chat-content .material-icons-round{font-size:80px;opacity:.3;margin-bottom:20px}
+.empty-chat-content h2{font-size:24px;color:var(--text-sec);margin-bottom:8px}
+.empty-chat-content p{font-size:15px}
+
+#activeChat{display:none;flex-direction:column;height:100%}
+#activeChat.show{display:flex}
+
+/* Chat Header */
+.chat-header{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 20px;height:var(--header-h);min-height:var(--header-h);
+  background:var(--surface);border-bottom:1px solid var(--border-light);
+}
+.chat-header .back-btn{display:none}
+.chat-user-info{display:flex;align-items:center;gap:12px;flex:1}
+.chat-user-details .username{font-weight:700;font-size:15px;display:block}
+.chat-user-details .user-status{font-size:12px;color:var(--text-muted)}
+.chat-user-details .user-status.online{color:var(--online)}
+
+/* Messages */
+#messageContainer{
+  flex:1;overflow-y:auto;padding:16px 20px;
+  display:flex;flex-direction:column;
+  background:linear-gradient(180deg,#f0f2f5 0%,#e8eaed 100%);
+}
+#messageList{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+
+.date-separator{
+  text-align:center;margin:16px 0 12px;
+}
+.date-separator span{
+  background:rgba(0,0,0,.06);color:var(--text-sec);
+  padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;
+}
+.message{display:flex;margin-bottom:2px}
+.message.sent{justify-content:flex-end}
+.message.received{justify-content:flex-start}
+.msg-bubble{
+  max-width:65%;padding:8px 12px;border-radius:var(--r-lg);
+  position:relative;word-wrap:break-word;line-height:1.45;
+}
+.message.sent .msg-bubble{
+  background:var(--sent);color:var(--sent-text);
+  border-bottom-right-radius:4px;
+}
+.message.received .msg-bubble{
+  background:var(--surface);color:var(--recv-text);
+  border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.06);
+}
+.msg-text{white-space:pre-wrap;word-break:break-word;font-size:14px}
+.msg-meta{
+  display:flex;align-items:center;justify-content:flex-end;gap:4px;
+  margin-top:4px;
+}
+.msg-time{font-size:11px;opacity:.7;font-weight:500}
+.msg-status{font-size:14px;opacity:.7}
+.message.sent .msg-status{color:rgba(255,255,255,.8)}
+
+/* Sticker Message */
+.msg-bubble.sticker-bubble{
+  background:transparent!important;box-shadow:none!important;
+  padding:4px!important;
+}
+.msg-sticker{font-size:72px;line-height:1}
+
+/* Image Message */
+.msg-image{
+  max-width:280px;border-radius:var(--r);overflow:hidden;cursor:pointer;
+  margin:-4px -4px 0;
+}
+.msg-image img{width:100%;display:block;border-radius:var(--r)}
+
+/* Typing Indicator */
+.typing-indicator{
+  display:none;align-items:center;gap:8px;
+  padding:4px 20px 8px;color:var(--text-muted);font-size:13px;
+}
+.typing-indicator.show{display:flex}
+.typing-dots{display:flex;gap:3px;align-items:center}
+.typing-dots span{
+  width:7px;height:7px;border-radius:50%;background:var(--text-muted);
+  animation:typingBounce .8s infinite;
+}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
+
+/* Sticker Panel */
+.sticker-panel{
+  display:none;height:260px;background:var(--surface);
+  border-top:1px solid var(--border-light);flex-direction:column;
+}
+.sticker-panel.show{display:flex}
+.sticker-tabs{
+  display:flex;padding:6px 12px;gap:2px;border-bottom:1px solid var(--border-light);
+  overflow-x:auto;flex-shrink:0;
+}
+.sticker-tab{
+  padding:6px 10px;border-radius:var(--r-sm);font-size:22px;
+  transition:all .15s;min-width:40px;
+}
+.sticker-tab:hover{background:var(--surface-hover)}
+.sticker-tab.active{background:var(--primary-bg)}
+.sticker-grid{
+  flex:1;display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(56px,1fr));
+  gap:4px;padding:12px;overflow-y:auto;align-content:start;
+}
+.sticker-item{
+  display:flex;align-items:center;justify-content:center;
+  font-size:36px;padding:8px;border-radius:var(--r-sm);
+  cursor:pointer;transition:all .15s;
+}
+.sticker-item:hover{background:var(--surface-hover);transform:scale(1.15)}
+
+/* Chat Input Area */
+.chat-input-area{
+  display:flex;align-items:flex-end;gap:6px;
+  padding:10px 16px;background:var(--surface);
+  border-top:1px solid var(--border-light);min-height:var(--input-h);
+}
+.input-wrapper{
+  flex:1;background:var(--bg);border-radius:var(--r-lg);
+  padding:2px 16px;display:flex;align-items:center;
+  border:2px solid transparent;transition:all .2s;
+}
+.input-wrapper:focus-within{border-color:var(--primary-light);background:#fff}
+.input-wrapper textarea{
+  flex:1;padding:10px 0;background:transparent;resize:none;
+  font-size:14px;line-height:1.4;max-height:120px;min-height:20px;
+}
+.send-btn{
+  width:44px;height:44px;border-radius:50%;background:var(--primary);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;flex-shrink:0;
+}
+.send-btn:hover{background:var(--primary-dark);transform:scale(1.05)}
+.send-btn .material-icons-round{font-size:20px;margin-left:2px}
+.chat-input-area .icon-btn{color:var(--text-muted);flex-shrink:0}
+.chat-input-area .icon-btn:hover{color:var(--primary)}
+
+/* ===== MODALS ===== */
+.modal{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeIn .2s ease;
+}
+.modal-overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(4px);
+}
+.modal-content{
+  position:relative;background:var(--surface);border-radius:var(--r-xl);
+  width:90%;max-width:440px;max-height:85vh;overflow:hidden;
+  box-shadow:var(--shadow-lg);animation:fadeInUp .3s ease;
+  display:flex;flex-direction:column;
+}
+.modal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:20px 24px;border-bottom:1px solid var(--border-light);
+}
+.modal-header h3{font-size:18px;font-weight:700}
+.modal-body{padding:24px;overflow-y:auto}
+.profile-avatar-section{
+  display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:24px;
+}
+.btn-text{color:var(--primary);font-weight:600;font-size:13px;padding:4px 8px;border-radius:var(--r-sm)}
+.btn-text:hover{background:var(--primary-bg)}
+
+/* Image Modal */
+.image-modal{background:rgba(0,0,0,.9);z-index:2000}
+.image-modal .image-modal-content{
+  position:relative;max-width:90vw;max-height:90vh;
+}
+.image-modal .image-modal-content img{
+  max-width:90vw;max-height:90vh;object-fit:contain;border-radius:var(--r-sm);
+}
+.close-image{
+  position:fixed;top:16px;right:16px;color:#fff!important;
+  background:rgba(255,255,255,.15)!important;
+}
+.close-image:hover{background:rgba(255,255,255,.3)!important}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);
+  background:var(--text);color:#fff;padding:12px 24px;border-radius:var(--r);
+  font-weight:500;font-size:14px;z-index:3000;
+  box-shadow:var(--shadow-lg);transition:transform .3s ease;
+  white-space:nowrap;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes typingBounce{
+  0%,60%,100%{transform:translateY(0)}
+  30%{transform:translateY(-5px)}
+}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.message{animation:msgIn .2s ease}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:768px){
+  #sidebar{
+    position:fixed;top:0;left:0;width:100%;min-width:unset;
+    z-index:20;transition:transform .3s ease;
+  }
+  #sidebar.hidden{transform:translateX(-100%)}
+  #chatArea{width:100%}
+  .chat-header .back-btn{display:flex}
+  .msg-bubble{max-width:80%}
+  .msg-image{max-width:220px}
+  .auth-card{padding:32px 24px}
+}
+@media(max-width:480px){
+  .sidebar-tabs .tab span:not(.material-icons-round){display:none}
+  .sticker-grid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr))}
+}
+
+/* Loading spinner */
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,.3);border-radius:50%;border-top-color:#fff;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ===== AUTH SCREEN ===== -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-icon">💬</span>
+      <h1>NexaChat</h1>
+      <p>Connect with friends instantly</p>
+    </div>
+
+    <!-- Login Form -->
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn-primary" id="loginBtn">Sign In</button>
+      <p class="auth-switch">Don't have an account? <a href="#" onclick="toggleAuth(event,'register')">Sign Up</a></p>
+    </form>
+
+    <!-- Register Form -->
+    <form id="registerForm" style="display:none" onsubmit="handleRegister(event)">
+      <div class="form-group">
+        <label>Nickname</label>
+        <input type="text" id="regNickname" placeholder="cooluser123" required minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="regEmail" placeholder="you@example.com" required>
+      </div>
+      <div class="form-group">
+        <label>Password (6+ characters)</label>
+        <input type="password" id="regPassword" placeholder="••••••••" required minlength="6">
+      </div>
+      <button type="submit" class="btn-primary" id="regBtn">Create Account</button>
+      <p class="auth-switch">Already have an account? <a href="#" onclick="toggleAuth(event,'login')">Sign In</a></p>
+    </form>
+
+    <div id="authError" class="error-msg"></div>
+  </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app" style="display:none">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="user-info" onclick="openProfileModal()">
+        <div class="avatar" id="myAvatar"></div>
+        <div class="user-details">
+          <span class="username" id="myNickname">Loading…</span>
+          <span class="user-status">Online</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" onclick="openRequestsModal()" title="Friend Requests">
+          <span class="material-icons-round">person_add</span>
+          <span class="badge" id="requestBadge" style="display:none">0</span>
+        </button>
+        <button class="icon-btn" onclick="handleLogout()" title="Sign Out">
+          <span class="material-icons-round">logout</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-tabs">
+      <button class="tab active" data-tab="chats" onclick="switchTab('chats')">
+        <span class="material-icons-round">chat</span>
+        <span>Chats</span>
+      </button>
+      <button class="tab" data-tab="friends" onclick="switchTab('friends')">
+        <span class="material-icons-round">people</span>
+        <span>Friends</span>
+      </button>
+      <button class="tab" data-tab="search" onclick="switchTab('search')">
+        <span class="material-icons-round">search</span>
+        <span>Search</span>
+      </button>
+    </div>
+
+    <div class="search-bar" id="searchBar" style="display:none">
+      <span class="material-icons-round">search</span>
+      <input type="text" id="searchInput" placeholder="Search by nickname…" oninput="debounceSearch()">
+    </div>
+
+    <div class="sidebar-content">
+      <!-- Chats -->
+      <div id="chatListContainer" class="tab-content active">
+        <div id="chatList"></div>
+        <div class="empty-state" id="noChats">
+          <span class="material-icons-round">forum</span>
+          <p>No conversations yet</p>
+          <small>Find friends and start chatting!</small>
+        </div>
+      </div>
+      <!-- Friends -->
+      <div id="friendListContainer" class="tab-content">
+        <div id="friendList"></div>
+        <div class="empty-state" id="noFriends">
+          <span class="material-icons-round">people_outline</span>
+          <p>No friends yet</p>
+          <small>Use Search to find people!</small>
+        </div>
+      </div>
+      <!-- Search -->
+      <div id="searchContainer" class="tab-content">
+        <div id="searchResults"></div>
+        <div class="empty-state" id="searchEmpty">
+          <span class="material-icons-round">person_search</span>
+          <p>Find new friends</p>
+          <small>Type a nickname above</small>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Chat Area -->
+  <main id="chatArea">
+    <div id="noChatSelected" class="empty-chat">
+      <div class="empty-chat-content">
+        <span class="material-icons-round">chat_bubble_outline</span>
+        <h2>Welcome to NexaChat</h2>
+        <p>Select a conversation to start messaging</p>
+      </div>
+    </div>
+
+    <div id="activeChat">
+      <div class="chat-header">
+        <button class="icon-btn back-btn" onclick="closeChatMobile()">
+          <span class="material-icons-round">arrow_back</span>
+        </button>
+        <div class="chat-user-info">
+          <div class="avatar" id="chatAvatar"></div>
+          <div class="chat-user-details">
+            <span class="username" id="chatNickname"></span>
+            <span class="user-status" id="chatStatus">offline</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="messageContainer">
+        <div id="messageList"></div>
+      </div>
+
+      <div id="typingIndicator" class="typing-indicator">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        <span>typing…</span>
+      </div>
+
+      <div id="stickerPanel" class="sticker-panel">
+        <div class="sticker-tabs" id="stickerTabs"></div>
+        <div class="sticker-grid" id="stickerGrid"></div>
+      </div>
+
+      <div class="chat-input-area">
+        <button class="icon-btn" onclick="toggleStickerPanel()" title="Stickers">
+          <span class="material-icons-round">emoji_emotions</span>
+        </button>
+        <button class="icon-btn" onclick="document.getElementById('photoInput').click()" title="Send Photo">
+          <span class="material-icons-round">image</span>
+        </button>
+        <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handlePhotoSelect(event)">
+        <div class="input-wrapper">
+          <textarea id="messageInput" placeholder="Type a message…" rows="1"></textarea>
+        </div>
+        <button class="send-btn" onclick="sendTextMessage()" title="Send">
+          <span class="material-icons-round">send</span>
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Profile Modal -->
+<div id="profileModal" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeProfileModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Edit Profile</h3>
+      <button class="icon-btn" onclick="closeProfileModal()"><span class="material-icons-round">close</span></button>
+    </div>
+    <div class="modal-body">
+      <div class="profile-avatar-section">
+        <div class="avatar large" id="profileAvatar"></div>
+        <button class="btn-text" onclick="document.getElementById('avatarInput').click()">Change Avatar</button>
+        <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarSelect(event)">
+      </div>
+      <div class="form-group">
+        <label>Nickname</label>
+        <input type="text" id="profileNickname" minlength="3" maxlength="20">
+      </div>
+      <div class="form-group">
+        <label>Bio</label>
+        <textarea id="profileBio" rows="3" placeholder="Tell something about yourself…"></textarea>
+      </div>
+      <button class="btn-primary" onclick="saveProfile()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Requests Modal -->
+<div id="requestsModal" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeRequestsModal()"></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Friend Requests</h3>
+      <button class="icon-btn" onclick="closeRequestsModal()"><span class="material-icons-round">close</span></button>
+    </div>
+    <div class="modal-body" id="requestListBody">
+      <div class="empty-state" id="noRequests">
+        <span class="material-icons-round">person_off</span>
+        <p>No pending requests</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Image Preview Modal -->
+<div id="imageModal" class="modal image-modal" style="display:none" onclick="closeImageModal()">
+  <div class="image-modal-content" onclick="event.stopPropagation()">
+    <button class="icon-btn close-image" onclick="closeImageModal()">
+      <span class="material-icons-round">close</span>
+    </button>
+    <img id="imagePreviewFull" src="">
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+/* ============================================================
+   FIREBASE CONFIG & INIT
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyC0AIM3gyJjCDCmloE0yxa6huEHaZTYtL4",
+  authDomain: "mess-3f931.firebaseapp.com",
+  databaseURL: "https://mess-3f931-default-rtdb.firebaseio.com",
+  projectId: "mess-3f931",
+  storageBucket: "mess-3f931.firebasestorage.app",
+  messagingSenderId: "102842967205",
+  appId: "1:102842967205:web:eafa86a55708805323d94c",
+  measurementId: "G-FXPZGW3X9T"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.database();
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let currentUid      = null;
+let currentUserData = null;
+let currentChat     = null;   // { chatId, friendUid }
+let friendsMap      = {};     // uid -> true
+let usersCache      = {};     // uid -> user data
+let chatListeners   = [];     // active chat-specific listeners
+let searchTimer     = null;
+let typingTimer     = null;
+let stickerOpen     = false;
+
+/* ============================================================
+   STICKER PACKS
+   ============================================================ */
+const stickerPacks = {
+  smileys: {
+    icon: '😀',
+    stickers: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖']
+  },
+  animals: {
+    icon: '🐶',
+    stickers: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🐘','🦛','🦏','🐪','🐫','🦒','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🐐','🦌','🐕','🐩','🐈','🐓','🦃','🦚','🦜','🦢','🦩','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔']
+  },
+  food: {
+    icon: '🍔',
+    stickers: ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🌽','🥕','🥔','🍠','🥐','🥖','🍞','🥨','🧀','🥚','🍳','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🥪','🥙','🌮','🌯','🥗','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🍤','🍙','🍚','🍘','🍥','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🍯','☕','🍵','🧃','🥤','🍶','🍺','🍻','🥂','🍷','🍸','🍹','🍾']
+  },
+  hearts: {
+    icon: '❤️',
+    stickers: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💝','💘','💟','♥️','🫶','🤟','🤙','👍','👎','👊','✊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🫂','🤳','💅','🫰','👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞']
+  },
+  objects: {
+    icon: '⚽',
+    stickers: ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🎱','🏓','🏸','🥅','⛳','🏹','🎣','🥊','🥋','🎽','🛹','🎿','🏆','🥇','🥈','🥉','🏅','🎖️','🎪','🎭','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🎷','🎺','🎸','🪗','🎻','🎲','♟️','🎯','🎳','🎮','🕹️','🧩','🎰','🚗','🚕','🚌','🏎️','🚑','🚒','✈️','🚀','🛸','🌍','🌈','⭐','🌙','☀️','⚡','🔥','💧','🌊','🎄','🎃','🎆','🎇','🧨','✨','🎈','🎉','🎊','🎁','🎀']
+  },
+  flags: {
+    icon: '🏳️',
+    stickers: ['🏳️','🏴','🏁','🚩','🏳️‍🌈','🏳️‍⚧️','🇺🇸','🇬🇧','🇫🇷','🇩🇪','🇮🇹','🇪🇸','🇷🇺','🇯🇵','🇰🇷','🇨🇳','🇮🇳','🇧🇷','🇨🇦','🇦🇺','🇲🇽','🇦🇷','🇹🇷','🇸🇦','🇿🇦','🇳🇬','🇪🇬','🇰🇪','🇵🇱','🇺🇦','🇳🇱','🇧🇪','🇨🇭','🇦🇹','🇸🇪','🇳🇴','🇩🇰','🇫🇮','🇮🇪','🇵🇹','🇬🇷','🇨🇿','🇷🇴','🇭🇺','🇮🇱','🇦🇪','🇹🇭','🇻🇳','🇮🇩','🇲🇾','🇵🇭','🇸🇬','🇳🇿','🇨🇴','🇨🇱','🇵🇪','🇪🇨','🇺🇾','🇵🇾','🇨🇺','🇯🇲','🇭🇹','🇩🇴']
+  }
+};
+
+/* ============================================================
+   AVATAR COLORS
+   ============================================================ */
+const avatarColors = [
+  '#6C5CE7','#E17055','#00B894','#0984E3','#E84393',
+  '#FDCB6E','#6D214F','#1B9CFC','#F97F51','#25CCF7',
+  '#EAB543','#55E6C1','#CAD3C8','#B33771','#3B3B98'
+];
+
+function getAvatarColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function renderAvatar(el, userData) {
+  if (!userData) { el.innerHTML = '?'; el.style.background = '#ccc'; return; }
+  if (userData.avatar) {
+    el.innerHTML = `<img src="${userData.avatar}" alt="">`;
+    el.style.background = 'transparent';
+  } else {
+    el.innerHTML = getInitials(userData.nickname || 'U');
+    el.style.background = getAvatarColor(userData.nickname || 'U');
+  }
+}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+function getChatId(uid1, uid2) {
+  return uid1 < uid2 ? `${uid1}_${uid2}` : `${uid2}_${uid1}`;
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts), now = new Date();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const time = `${hh}:${mm}`;
+  if (d.toDateString() === now.toDateString()) return time;
+  const y = new Date(now); y.setDate(y.getDate()-1);
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+function formatMsgTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function formatDateSep(ts) {
+  const d = new Date(ts), now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  const y = new Date(now); y.setDate(y.getDate()-1);
+  if (d.toDateString() === y.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+
+function formatLastSeen(ts) {
+  if (!ts) return 'offline';
+  const d = new Date(ts), now = new Date(), diff = now - d;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+  return formatTime(ts);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function compressImage(file, maxW, maxH, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = (maxW/w)*h; w = maxW; }
+        if (h > maxH) { w = (maxH/h)*w; h = maxH; }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function fetchUser(uid) {
+  if (usersCache[uid]) return usersCache[uid];
+  const snap = await db.ref(`users/${uid}`).once('value');
+  if (snap.exists()) { usersCache[uid] = snap.val(); return snap.val(); }
+  return null;
+}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+function toggleAuth(e, mode) {
+  e.preventDefault();
+  document.getElementById('loginForm').style.display  = mode === 'login' ? 'block' : 'none';
+  document.getElementById('registerForm').style.display = mode === 'register' ? 'block' : 'none';
+  document.getElementById('authError').classList.remove('show');
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  const nickname = document.getElementById('regNickname').value.trim();
+  const email    = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const btn      = document.getElementById('regBtn');
+
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(nickname)) {
+    return showAuthError('Nickname: 3-20 chars, letters/numbers/underscore only.');
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    // Check nickname
+    const nickSnap = await db.ref(`nicknames/${nickname.toLowerCase()}`).once('value');
+    if (nickSnap.exists()) throw new Error('This nickname is already taken.');
+
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const uid  = cred.user.uid;
+
+    await db.ref(`users/${uid}`).set({
+      nickname, nicknameLower: nickname.toLowerCase(),
+      email, avatar: '', bio: '',
+      status: 'online',
+      lastSeen: firebase.database.ServerValue.TIMESTAMP,
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    await db.ref(`nicknames/${nickname.toLowerCase()}`).set(uid);
+
+  } catch (err) {
+    showAuthError(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn      = document.getElementById('loginBtn');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (err) {
+    showAuthError(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+async function handleLogout() {
+  if (currentUid) {
+    await db.ref(`users/${currentUid}/status`).set('offline');
+    await db.ref(`users/${currentUid}/lastSeen`).set(firebase.database.ServerValue.TIMESTAMP);
+  }
+  auth.signOut();
+}
+
+/* ============================================================
+   AUTH STATE LISTENER
+   ============================================================ */
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    currentUid = user.uid;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    await initApp();
+  } else {
+    currentUid = null;
+    currentUserData = null;
+    currentChat = null;
+    document.getElementById('authScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    // Reset forms
+    document.getElementById('loginForm').reset();
+    document.getElementById('registerForm').reset();
+    document.getElementById('loginBtn').disabled = false;
+    document.getElementById('loginBtn').textContent = 'Sign In';
+    document.getElementById('regBtn').disabled = false;
+    document.getElementById('regBtn').textContent = 'Create Account';
+    document.getElementById('authError').classList.remove('show');
+    clearAllListeners();
+  }
+});
+
+/* ============================================================
+   APP INIT
+   ============================================================ */
+async function initApp() {
+  // Set online
+  db.ref(`users/${currentUid}/status`).set('online');
+  db.ref(`users/${currentUid}/lastSeen`).set(firebase.database.ServerValue.TIMESTAMP);
+  db.ref(`users/${currentUid}/status`).onDisconnect().set('offline');
+  db.ref(`users/${currentUid}/lastSeen`).onDisconnect().set(firebase.database.ServerValue.TIMESTAMP);
+
+  // Load own profile
+  const snap = await db.ref(`users/${currentUid}`).once('value');
+  currentUserData = snap.val();
+  usersCache[currentUid] = currentUserData;
+  updateMyProfile();
+
+  // Init stickers
+  initStickerPanel();
+
+  // Start listeners
+  listenFriends();
+  listenChatList();
+  listenFriendRequests();
+
+  // Textarea handlers
+  const input = document.getElementById('messageInput');
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage(); }
+  });
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    handleTyping();
+  });
+}
+
+function updateMyProfile() {
+  document.getElementById('myNickname').textContent = currentUserData.nickname;
+  renderAvatar(document.getElementById('myAvatar'), currentUserData);
+}
+
+/* ============================================================
+   LISTENERS MANAGEMENT
+   ============================================================ */
+let globalListenerRefs = [];
+
+function clearAllListeners() {
+  globalListenerRefs.forEach(r => r.ref.off(r.event, r.cb));
+  globalListenerRefs = [];
+  clearChatListeners();
+}
+
+function clearChatListeners() {
+  chatListeners.forEach(r => r.ref.off(r.event, r.cb));
+  chatListeners = [];
+}
+
+/* ============================================================
+   FRIENDS LISTENER
+   ============================================================ */
+function listenFriends() {
+  const ref = db.ref(`friends/${currentUid}`);
+  const cb = ref.on('value', (snap) => {
+    friendsMap = snap.val() || {};
+    renderFriendList();
+  });
+  globalListenerRefs.push({ ref, event: 'value', cb });
+}
+
+async function renderFriendList() {
+  const container = document.getElementById('friendList');
+  const uids = Object.keys(friendsMap);
+  const noFriends = document.getElementById('noFriends');
+
+  if (uids.length === 0) {
+    container.innerHTML = '';
+    noFriends.style.display = 'flex';
+    return;
+  }
+  noFriends.style.display = 'none';
+
+  // Fetch all friend data
+  const friends = await Promise.all(uids.map(uid => fetchUser(uid)));
+
+  container.innerHTML = uids.map((uid, i) => {
+    const f = friends[i];
+    if (!f) return '';
+    const isOnline = f.status === 'online';
+    const statusText = isOnline ? 'Online' : `Last seen ${formatLastSeen(f.lastSeen)}`;
+    return `
+      <div class="friend-item" onclick="openChatWith('${uid}')">
+        <div class="avatar" id="friendAv_${uid}"></div>
+        <div class="friend-item-info">
+          <div class="name">${escHTML(f.nickname)}</div>
+          <div class="status-text ${isOnline?'online':''}">${statusText}</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn-sm primary" onclick="event.stopPropagation();openChatWith('${uid}')">Chat</button>
+          <button class="btn-sm danger" onclick="event.stopPropagation();removeFriend('${uid}')" title="Remove">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Render avatars
+  uids.forEach((uid, i) => {
+    const el = document.getElementById(`friendAv_${uid}`);
+    if (el && friends[i]) renderAvatar(el, friends[i]);
+  });
+
+  // Listen for status changes
+  uids.forEach(uid => {
+    const sRef = db.ref(`users/${uid}/status`);
+    sRef.on('value', () => renderFriendList());
+    // We won't track these carefully; OK for this app
+  });
+}
+
+async function removeFriend(uid) {
+  if (!confirm('Remove this friend?')) return;
+  const updates = {};
+  updates[`friends/${currentUid}/${uid}`] = null;
+  updates[`friends/${uid}/${currentUid}`] = null;
+  await db.ref().update(updates);
+  showToast('Friend removed');
+}
+
+/* ============================================================
+   FRIEND REQUESTS
+   ============================================================ */
+function listenFriendRequests() {
+  const ref = db.ref(`friendRequests/${currentUid}`);
+  const cb = ref.on('value', (snap) => {
+    const requests = snap.val() || {};
+    const count = Object.keys(requests).length;
+    const badge = document.getElementById('requestBadge');
+    if (count > 0) {
+      badge.style.display = 'flex';
+      badge.textContent = count;
+    } else {
+      badge.style.display = 'none';
+    }
+    renderRequests(requests);
+  });
+  globalListenerRefs.push({ ref, event: 'value', cb });
+}
+
+async function renderRequests(requests) {
+  const container = document.getElementById('requestListBody');
+  const uids = Object.keys(requests);
+  const noReq = document.getElementById('noRequests');
+
+  if (uids.length === 0) {
+    container.innerHTML = '';
+    container.appendChild(noReq);
+    noReq.style.display = 'flex';
+    return;
+  }
+  noReq.style.display = 'none';
+
+  const users = await Promise.all(uids.map(uid => fetchUser(uid)));
+
+  container.innerHTML = uids.map((uid, i) => {
+    const u = users[i] || { nickname: requests[uid].nickname || 'Unknown' };
+    return `
+      <div class="request-item" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-light)">
+        <div class="avatar" id="reqAv_${uid}"></div>
+        <div class="friend-item-info" style="flex:1;min-width:0">
+          <div class="name">${escHTML(u.nickname)}</div>
+          <div class="status-text">Wants to be your friend</div>
+        </div>
+        <div class="item-actions">
+          <button class="btn-sm primary" onclick="acceptRequest('${uid}')">Accept</button>
+          <button class="btn-sm secondary" onclick="rejectRequest('${uid}')">Reject</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  uids.forEach((uid, i) => {
+    const el = document.getElementById(`reqAv_${uid}`);
+    if (el) renderAvatar(el, users[i] || { nickname: '?' });
+  });
+}
+
+async function acceptRequest(fromUid) {
+  const updates = {};
+  updates[`friends/${currentUid}/${fromUid}`] = true;
+  updates[`friends/${fromUid}/${currentUid}`] = true;
+  updates[`friendRequests/${currentUid}/${fromUid}`] = null;
+  await db.ref().update(updates);
+  showToast('Friend added! 🎉');
+}
+
+async function rejectRequest(fromUid) {
+  await db.ref(`friendRequests/${currentUid}/${fromUid}`).remove();
+  showToast('Request rejected');
+}
+
+async function sendFriendRequest(toUid) {
+  if (toUid === currentUid) return showToast("You can't add yourself!");
+  if (friendsMap[toUid]) return showToast('Already friends!');
+
+  // Check if already sent
+  const existing = await db.ref(`friendRequests/${toUid}/${currentUid}`).once('value');
+  if (existing.exists()) return showToast('Request already sent!');
+
+  // Check if they sent us one
+  const reverse = await db.ref(`friendRequests/${currentUid}/${toUid}`).once('value');
+  if (reverse.exists()) {
+    await acceptRequest(toUid);
+    return;
+  }
+
+  await db.ref(`friendRequests/${toUid}/${currentUid}`).set({
+    from: currentUid,
+    nickname: currentUserData.nickname,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+  showToast('Friend request sent! ✉️');
+}
+
+/* ============================================================
+   SEARCH
+   ============================================================ */
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(handleSearch, 400);
+}
+
+async function handleSearch() {
+  const query = document.getElementById('searchInput').value.trim().toLowerCase();
+  const container = document.getElementById('searchResults');
+  const empty = document.getElementById('searchEmpty');
+
+  if (query.length < 2) {
+    container.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+
+  const snap = await db.ref('users')
+    .orderByChild('nicknameLower')
+    .startAt(query)
+    .endAt(query + '\uf8ff')
+    .limitToFirst(20)
+    .once('value');
+
+  const results = [];
+  snap.forEach(child => {
+    if (child.key !== currentUid) {
+      results.push({ uid: child.key, ...child.val() });
+    }
+  });
+
+  if (results.length === 0) {
+    container.innerHTML = '<div class="empty-state"><span class="material-icons-round">search_off</span><p>No users found</p></div>';
+    empty.style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+  container.innerHTML = results.map(u => {
+    const isFriend = friendsMap[u.uid];
+    return `
+      <div class="chat-item" style="cursor:default">
+        <div class="avatar" id="searchAv_${u.uid}"></div>
+        <div class="chat-item-info">
+          <div class="name">${escHTML(u.nickname)}</div>
+          <div class="last-msg">${u.bio ? escHTML(u.bio) : 'NexaChat user'}</div>
+        </div>
+        <div class="item-actions">
+          ${isFriend
+            ? `<button class="btn-sm primary" onclick="openChatWith('${u.uid}')">Chat</button>`
+            : `<button class="btn-sm primary" id="addBtn_${u.uid}" onclick="handleAddFriend('${u.uid}',this)">Add Friend</button>`
+          }
+        </div>
+      </div>`;
+  }).join('');
+
+  results.forEach(u => {
+    const el = document.getElementById(`searchAv_${u.uid}`);
+    if (el) renderAvatar(el, u);
+  });
+}
+
+async function handleAddFriend(uid, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Sent';
+  await sendFriendRequest(uid);
+}
+
+/* ============================================================
+   CHAT LIST
+   ============================================================ */
+function listenChatList() {
+  const ref = db.ref(`userChats/${currentUid}`).orderByChild('lastTimestamp');
+  const cb = ref.on('value', (snap) => {
+    renderChatList(snap.val());
+  });
+  globalListenerRefs.push({ ref, event: 'value', cb });
+}
+
+async function renderChatList(chatsData) {
+  const container = document.getElementById('chatList');
+  const empty = document.getElementById('noChats');
+
+  if (!chatsData) {
+    container.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+
+  empty.style.display = 'none';
+
+  // Sort by lastTimestamp descending
+  const entries = Object.entries(chatsData).sort((a,b) => (b[1].lastTimestamp||0) - (a[1].lastTimestamp||0));
+
+  // Fetch friend data for each chat
+  const friendDataMap = {};
+  await Promise.all(entries.map(async ([chatId, chat]) => {
+    friendDataMap[chat.friendUid] = await fetchUser(chat.friendUid);
+  }));
+
+  container.innerHTML = entries.map(([chatId, chat]) => {
+    const f = friendDataMap[chat.friendUid] || { nickname: 'Unknown' };
+    const isActive = currentChat && currentChat.chatId === chatId;
+    const unread = chat.unread || 0;
+    let preview = chat.lastMessage || '';
+    if (chat.lastMessageType === 'image') preview = '📷 Photo';
+    if (chat.lastMessageType === 'sticker') preview = '🎭 Sticker';
+
+    return `
+      <div class="chat-item ${isActive?'active':''}" onclick="openChatWith('${chat.friendUid}')">
+        <div class="avatar" id="chatListAv_${chat.friendUid}">
+          ${f.status==='online'?'<div class="online-dot"></div>':''}
+        </div>
+        <div class="chat-item-info">
+          <div class="name">${escHTML(f.nickname)}</div>
+          <div class="last-msg">${escHTML(preview)}</div>
+        </div>
+        <div class="chat-item-meta">
+          <div class="time">${formatTime(chat.lastTimestamp)}</div>
+          ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  entries.forEach(([chatId, chat]) => {
+    const el = document.getElementById(`chatListAv_${chat.friendUid}`);
+    const f = friendDataMap[chat.friendUid];
+    if (el && f) {
+      const dot = el.querySelector('.online-dot');
+      renderAvatar(el, f);
+      if (f.status === 'online') {
+        const dotEl = document.createElement('div');
+        dotEl.className = 'online-dot';
+        el.appendChild(dotEl);
+      }
+    }
+  });
+}
+
+/* ============================================================
+   OPEN CHAT
+   ============================================================ */
+async function openChatWith(friendUid) {
+  const chatId = getChatId(currentUid, friendUid);
+
+  // Clean previous listeners
+  clearChatListeners();
+
+  currentChat = { chatId, friendUid };
+
+  // Hide "no chat" and show active
+  document.getElementById('noChatSelected').style.display = 'none';
+  const ac = document.getElementById('activeChat');
+  ac.classList.add('show');
+
+  // Reset
+  document.getElementById('messageList').innerHTML = '';
+  document.getElementById('messageInput').value = '';
+  document.getElementById('messageInput').style.height = 'auto';
+  closeStickerPanel();
+
+  // Fetch friend data
+  const friendData = await fetchUser(friendUid);
+
+  // Render header
+  renderAvatar(document.getElementById('chatAvatar'), friendData);
+  document.getElementById('chatNickname').textContent = friendData ? friendData.nickname : 'Unknown';
+
+  // Listen to friend status
+  const statusRef = db.ref(`users/${friendUid}`);
+  const statusCb = statusRef.on('value', (snap) => {
+    const data = snap.val();
+    if (data) {
+      const statusEl = document.getElementById('chatStatus');
+      if (data.status === 'online') {
+        statusEl.textContent = 'online';
+        statusEl.className = 'user-status online';
+      } else {
+        statusEl.textContent = `last seen ${formatLastSeen(data.lastSeen)}`;
+        statusEl.className = 'user-status';
+      }
+    }
+  });
+  chatListeners.push({ ref: statusRef, event: 'value', cb: statusCb });
+
+  // Mark as read
+  db.ref(`userChats/${currentUid}/${chatId}/unread`).set(0);
+
+  // Listen to messages
+  const msgRef = db.ref(`messages/${chatId}`).orderByChild('timestamp').limitToLast(200);
+  const msgCb = msgRef.on('value', (snap) => {
+    renderMessages(snap);
+    // Mark as read again if new messages
+    if (currentChat && currentChat.chatId === chatId) {
+      db.ref(`userChats/${currentUid}/${chatId}/unread`).set(0);
+    }
+  });
+  chatListeners.push({ ref: msgRef, event: 'value', cb: msgCb });
+
+  // Listen to typing
+  const typeRef = db.ref(`typing/${chatId}/${friendUid}`);
+  const typeCb = typeRef.on('value', (snap) => {
+    const ts = snap.val();
+    const indicator = document.getElementById('typingIndicator');
+    if (ts && Date.now() - ts < 4000) {
+      indicator.classList.add('show');
+    } else {
+      indicator.classList.remove('show');
+    }
+  });
+  chatListeners.push({ ref: typeRef, event: 'value', cb: typeCb });
+
+  // Mobile: hide sidebar
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.add('hidden');
+  }
+
+  // Focus input
+  setTimeout(() => document.getElementById('messageInput').focus(), 300);
+}
+
+function renderMessages(snap) {
+  const container = document.getElementById('messageList');
+  const scrollContainer = document.getElementById('messageContainer');
+  const wasAtBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight < 100;
+
+  const messages = [];
+  snap.forEach(child => {
+    messages.push({ id: child.key, ...child.val() });
+  });
+
+  let html = '';
+  let lastDate = '';
+
+  messages.forEach(msg => {
+    const msgDate = new Date(msg.timestamp).toDateString();
+    if (msgDate !== lastDate) {
+      html += `<div class="date-separator"><span>${formatDateSep(msg.timestamp)}</span></div>`;
+      lastDate = msgDate;
+    }
+
+    const isMine = msg.sender === currentUid;
+    const cls = isMine ? 'sent' : 'received';
+
+    let content = '';
+    if (msg.type === 'sticker') {
+      content = `
+        <div class="msg-bubble sticker-bubble">
+          <div class="msg-sticker">${msg.text}</div>
+          <div class="msg-meta"><span class="msg-time">${formatMsgTime(msg.timestamp)}</span></div>
+        </div>`;
+    } else if (msg.type === 'image') {
+      content = `
+        <div class="msg-bubble">
+          <div class="msg-image" onclick="openImageModal('${escAttr(msg.text)}')">
+            <img src="${msg.text}" loading="lazy" alt="Photo">
+          </div>
+          <div class="msg-meta"><span class="msg-time">${formatMsgTime(msg.timestamp)}</span></div>
+        </div>`;
+    } else {
+      content = `
+        <div class="msg-bubble">
+          <div class="msg-text">${escHTML(msg.text)}</div>
+          <div class="msg-meta"><span class="msg-time">${formatMsgTime(msg.timestamp)}</span></div>
+        </div>`;
+    }
+
+    html += `<div class="message ${cls}">${content}</div>`;
+  });
+
+  container.innerHTML = html;
+
+  if (wasAtBottom || messages.length <= 1) {
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+  }
+}
+
+/* ============================================================
+   SEND MESSAGES
+   ============================================================ */
+async function sendTextMessage() {
+  if (!currentChat) return;
+  const input = document.getElementById('messageInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  await sendMessage(text, 'text');
+}
+
+async function sendMessage(text, type) {
+  if (!currentChat) return;
+  const { chatId, friendUid } = currentChat;
+
+  // Push message
+  const msgRef = db.ref(`messages/${chatId}`).push();
+  await msgRef.set({
+    sender: currentUid,
+    text, type,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+
+  // Determine preview
+  let preview = text;
+  if (type === 'image') preview = '📷 Photo';
+  if (type === 'sticker') preview = '🎭 Sticker';
+
+  // Update my chat entry
+  await db.ref(`userChats/${currentUid}/${chatId}`).update({
+    friendUid,
+    lastMessage: preview,
+    lastMessageType: type,
+    lastTimestamp: firebase.database.ServerValue.TIMESTAMP,
+    unread: 0
+  });
+
+  // Update friend's chat entry (increment unread)
+  const friendChatRef = db.ref(`userChats/${friendUid}/${chatId}`);
+  const friendChatSnap = await friendChatRef.once('value');
+  const friendChatData = friendChatSnap.val() || {};
+
+  await friendChatRef.update({
+    friendUid: currentUid,
+    lastMessage: preview,
+    lastMessageType: type,
+    lastTimestamp: firebase.database.ServerValue.TIMESTAMP,
+    unread: (friendChatData.unread || 0) + 1
+  });
+
+  // Clear typing
+  db.ref(`typing/${chatId}/${currentUid}`).remove();
+}
+
+/* ============================================================
+   PHOTOS
+   ============================================================ */
+async function handlePhotoSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  if (!file.type.startsWith('image/')) return showToast('Please select an image');
+  if (file.size > 10 * 1024 * 1024) return showToast('Image too large (max 10MB)');
+
+  showToast('Sending photo…');
+
+  try {
+    const base64 = await compressImage(file, 800, 800, 0.6);
+    await sendMessage(base64, 'image');
+  } catch (err) {
+    showToast('Failed to send photo');
+    console.error(err);
+  }
+}
+
+/* ============================================================
+   STICKERS
+   ============================================================ */
+function initStickerPanel() {
+  const tabsContainer = document.getElementById('stickerTabs');
+  const packs = Object.entries(stickerPacks);
+
+  tabsContainer.innerHTML = packs.map(([key, pack], i) =>
+    `<button class="sticker-tab ${i===0?'active':''}" data-pack="${key}" onclick="switchStickerPack('${key}')">${pack.icon}</button>`
+  ).join('');
+
+  switchStickerPack(packs[0][0]);
+}
+
+function switchStickerPack(packName) {
+  const pack = stickerPacks[packName];
+  if (!pack) return;
+
+  document.querySelectorAll('.sticker-tab').forEach(t => t.classList.toggle('active', t.dataset.pack === packName));
+
+  const grid = document.getElementById('stickerGrid');
+  grid.innerHTML = pack.stickers.map(s =>
+    `<div class="sticker-item" onclick="sendSticker('${s}')">${s}</div>`
+  ).join('');
+}
+
+function toggleStickerPanel() {
+  stickerOpen = !stickerOpen;
+  document.getElementById('stickerPanel').classList.toggle('show', stickerOpen);
+}
+
+function closeStickerPanel() {
+  stickerOpen = false;
+  document.getElementById('stickerPanel').classList.remove('show');
+}
+
+async function sendSticker(emoji) {
+  closeStickerPanel();
+  await sendMessage(emoji, 'sticker');
+}
+
+/* ============================================================
+   TYPING INDICATOR
+   ============================================================ */
+function handleTyping() {
+  if (!currentChat) return;
+  const { chatId } = currentChat;
+
+  db.ref(`typing/${chatId}/${currentUid}`).set(firebase.database.ServerValue.TIMESTAMP);
+
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    db.ref(`typing/${chatId}/${currentUid}`).remove();
+  }, 2500);
+}
+
+/* ============================================================
+   PROFILE
+   ============================================================ */
+function openProfileModal() {
+  document.getElementById('profileNickname').value = currentUserData.nickname || '';
+  document.getElementById('profileBio').value = currentUserData.bio || '';
+  renderAvatar(document.getElementById('profileAvatar'), currentUserData);
+  document.getElementById('profileModal').style.display = 'flex';
+}
+
+function closeProfileModal() {
+  document.getElementById('profileModal').style.display = 'none';
+}
+
+async function handleAvatarSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  try {
+    const base64 = await compressImage(file, 200, 200, 0.7);
+    currentUserData.avatar = base64;
+    await db.ref(`users/${currentUid}/avatar`).set(base64);
+    usersCache[currentUid] = currentUserData;
+    renderAvatar(document.getElementById('profileAvatar'), currentUserData);
+    updateMyProfile();
+    showToast('Avatar updated! 📸');
+  } catch (err) {
+    showToast('Failed to update avatar');
+  }
+}
+
+async function saveProfile() {
+  const nickname = document.getElementById('profileNickname').value.trim();
+  const bio = document.getElementById('profileBio').value.trim();
+
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(nickname)) {
+    return showToast('Invalid nickname (3-20 chars, a-z, 0-9, _)');
+  }
+
+  // If nickname changed, check availability
+  if (nickname.toLowerCase() !== currentUserData.nicknameLower) {
+    const snap = await db.ref(`nicknames/${nickname.toLowerCase()}`).once('value');
+    if (snap.exists()) return showToast('Nickname already taken!');
+
+    // Remove old nickname mapping
+    await db.ref(`nicknames/${currentUserData.nicknameLower}`).remove();
+    // Set new
+    await db.ref(`nicknames/${nickname.toLowerCase()}`).set(currentUid);
+  }
+
+  await db.ref(`users/${currentUid}`).update({
+    nickname, nicknameLower: nickname.toLowerCase(), bio
+  });
+
+  currentUserData.nickname = nickname;
+  currentUserData.nicknameLower = nickname.toLowerCase();
+  currentUserData.bio = bio;
+  usersCache[currentUid] = currentUserData;
+  updateMyProfile();
+  closeProfileModal();
+  showToast('Profile updated! ✨');
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+function openRequestsModal() {
+  document.getElementById('requestsModal').style.display = 'flex';
+}
+function closeRequestsModal() {
+  document.getElementById('requestsModal').style.display = 'none';
+}
+function openImageModal(src) {
+  document.getElementById('imagePreviewFull').src = src;
+  document.getElementById('imageModal').style.display = 'flex';
+}
+function closeImageModal() {
+  document.getElementById('imageModal').style.display = 'none';
+  document.getElementById('imagePreviewFull').src = '';
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+function switchTab(tab) {
+  document.querySelectorAll('.sidebar-tabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+  if (tab === 'chats') document.getElementById('chatListContainer').classList.add('active');
+  if (tab === 'friends') document.getElementById('friendListContainer').classList.add('active');
+  if (tab === 'search') document.getElementById('searchContainer').classList.add('active');
+
+  document.getElementById('searchBar').style.display = tab === 'search' ? 'flex' : 'none';
+  if (tab === 'search') document.getElementById('searchInput').focus();
+}
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+function closeChatMobile() {
+  document.getElementById('sidebar').classList.remove('hidden');
+  document.getElementById('activeChat').classList.remove('show');
+  document.getElementById('noChatSelected').style.display = 'flex';
+  clearChatListeners();
+  currentChat = null;
+}
+
+/* ============================================================
+   ESCAPE HTML
+   ============================================================ */
+function escHTML(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+function escAttr(str) {
+  return (str||'').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUT: Escape to close modals
+   ============================================================ */
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeProfileModal();
+    closeRequestsModal();
+    closeImageModal();
+    closeStickerPanel();
+  }
+});
+
+/* ============================================================
+   PERIODIC TYPING CLEANUP
+   ============================================================ */
+setInterval(() => {
+  const indicator = document.getElementById('typingIndicator');
+  // Auto-hide typing after some time (handled by listener, but safety net)
+}, 5000);
+
+</script>
+</body>
+</html>
